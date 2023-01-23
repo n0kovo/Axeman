@@ -25,7 +25,7 @@ from rich.live import Live
 from rich.table import Table
 from rich.text import Text
 from rich.logging import RichHandler
-from rich.progress import Progress
+from rich.status import Status
 
 try:
     locale.setlocale(locale.LC_ALL, "en_US")
@@ -43,7 +43,7 @@ MAX_QUEUE_SIZE = 1000
 console = Console()
 
 
-async def download_worker(session, log_info, work_deque, download_queue, progress):
+async def download_worker(session, log_info, work_deque, download_queue, rich_status):
     while True:
         try:
             start, end = work_deque.popleft()
@@ -80,7 +80,7 @@ async def download_worker(session, log_info, work_deque, download_queue, progres
         )
 
 
-async def queue_monitor(log_info, work_deque, download_results_queue, progress):
+async def queue_monitor(log_info, work_deque, download_results_queue, rich_status):
     total_size = log_info["tree_size"] - 1
     total_blocks = math.ceil(total_size / log_info["block_size"])
 
@@ -98,7 +98,7 @@ async def queue_monitor(log_info, work_deque, download_results_queue, progress):
 
 async def retrieve_certificates(
     loop,
-    progress,
+    rich_status,
     url=None,
     ctl_offset=0,
     output_directory="/tmp/",
@@ -139,7 +139,7 @@ async def retrieve_certificates(
             download_tasks = asyncio.gather(
                 *[
                     download_worker(
-                        session, log_info, work_deque, download_results_queue, progress
+                        session, log_info, work_deque, download_results_queue, rich_status
                     )
                     for _ in range(concurrency_count)
                 ]
@@ -147,11 +147,11 @@ async def retrieve_certificates(
 
             processing_task = asyncio.ensure_future(
                 processing_coro(
-                    download_results_queue, progress, output_dir=output_directory
+                    download_results_queue, rich_status, output_dir=output_directory
                 )
             )
             queue_monitor_task = asyncio.ensure_future(
-                queue_monitor(log_info, work_deque, download_results_queue, progress)
+                queue_monitor(log_info, work_deque, download_results_queue, rich_status)
             )
 
             asyncio.ensure_future(download_tasks)
@@ -178,7 +178,7 @@ async def retrieve_certificates(
             )
 
 
-async def processing_coro(download_results_queue, progress, output_dir="/tmp"):
+async def processing_coro(download_results_queue, rich_status, output_dir="/tmp"):
     logging.info(f"[blue]Starting processing coro and process pool")
     process_pool = aioprocessing.AioPool(initargs=(output_dir,))
 
@@ -207,7 +207,7 @@ async def processing_coro(download_results_queue, progress, output_dir="/tmp"):
             entry["log_dir"] = csv_storage
 
         if len(entries_iter) > 0:
-            await process_pool.coro_starmap(process_worker, [(entries_iter, progress)])
+            await process_pool.coro_starmap(process_worker, [(entries_iter, rich_status)])
 
         logging.info(f"[green]Done mapping! Got results")
 
@@ -219,7 +219,7 @@ async def processing_coro(download_results_queue, progress, output_dir="/tmp"):
     await process_pool.coro_join()
 
 
-def process_worker(result_info, progress):
+def process_worker(result_info, rich_status):
     logging.debug(f"Worker {os.getpid()} starting...")
     if not result_info:
         return
@@ -349,8 +349,7 @@ async def get_certs_and_print():
 
 
 def main():
-    with Progress(transient=True) as progress:
-        task = progress.add_task("Working", total=None)
+    with Status("Working...") as rich_status:
 
         loop = asyncio.get_event_loop()
 
@@ -444,7 +443,7 @@ def main():
             loop.run_until_complete(
                 retrieve_certificates(
                     loop,
-                    progress,
+                    rich_status,
                     url=args.ctl_url,
                     ctl_offset=int(args.ctl_offset),
                     concurrency_count=args.concurrency_count,
@@ -455,7 +454,7 @@ def main():
             loop.run_until_complete(
                 retrieve_certificates(
                     loop,
-                    progress,
+                    rich_status,
                     concurrency_count=args.concurrency_count,
                     output_directory=args.output_dir,
                 )
