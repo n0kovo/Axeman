@@ -3,18 +3,26 @@ import asyncio
 from collections import deque
 
 import uvloop
+
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-import sys
-import math
 import base64
-import os
-import traceback
 import hashlib
+import locale
+import logging
+import math
+import os
+import sys
+import traceback
+
 import aiohttp
 import aioprocessing
-import logging
-import locale
+from rich import box
+from rich.align import Align
+from rich.console import Console
+from rich.live import Live
+from rich.table import Table
+from rich.text import Text
 
 try:
     locale.setlocale(locale.LC_ALL, 'en_US')
@@ -28,6 +36,8 @@ from . import certlib
 
 DOWNLOAD_CONCURRENCY = 50
 MAX_QUEUE_SIZE = 1000
+
+console = Console()
 
 async def download_worker(session, log_info, work_deque, download_queue):
     while True:
@@ -237,22 +247,30 @@ def process_worker(result_info):
     return True
 
 async def get_certs_and_print():
-    async with aiohttp.ClientSession(conn_timeout=5) as session:
-        ctls = await certlib.retrieve_all_ctls(session)
-        print(f"Found {len(ctls)} CTLs...")
-        for log in ctls:
-            log_name = log['description']
-            try:
-                log_info = await certlib.retrieve_log_info(log, session)
-            except Exception as e:
-                logging.warn(f"Could not retrieve {log_name}")
-                continue
-
-            print(log_name)
-            print(f"    \\- URL:            {log['url']}")
-            print(f"    \\- Owner:          {log_info['operated_by']}")
-            print(f"    \\- Cert Count:     {locale.format('%d', log_info['tree_size'] - 1, grouping=True)}")
-            print(f"    \\- Max Block Size: {log_info['block_size']}\n")
+    table = Table(show_footer=False, expand=True, box=box.MINIMAL_DOUBLE_HEAD)
+    table.add_column("Name", no_wrap=True)
+    table.add_column("URL", no_wrap=True)
+    table.add_column("Owner", no_wrap=True)
+    table.add_column("Cert Count", no_wrap=True)
+    table.add_column("Max Block Size", no_wrap=True)
+    with Live(table, refresh_per_second=4):
+        async with aiohttp.ClientSession(conn_timeout=5) as session:
+            ctls = await certlib.retrieve_all_ctls(session)
+            print(f"Found {len(ctls)} CTLs...")
+            for log in ctls:
+                log_name = log['description']
+                try:
+                    log_info = await certlib.retrieve_log_info(log, session)
+                except Exception as e:
+                    logging.debug(f"Could not retrieve {log_name}: {e}")
+                    continue
+        
+                row = (str(log_name),
+                            str(log['url']),
+                            str(log_info['operated_by']),
+                            str(locale.format('%d', log_info['tree_size'] - 1, grouping=True)),
+                            str(log_info['block_size']))
+                table.add_row(*row)
 
 def main():
     loop = asyncio.get_event_loop()
