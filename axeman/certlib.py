@@ -93,8 +93,8 @@ async def populate_work(work_deque, log_info, start=0):
         if end >= tree_size:
             end = tree_size - 1
 
-        assert end >= start, "End {} is less than start {}!".format(end, start)
-        assert end < tree_size, "End {} is less than tree_size {}".format(end, tree_size)
+        assert end >= start, f"End {end} is less than start {start}!"
+        assert end < tree_size, f"End {end} is less than tree_size {tree_size}"
 
         work_deque.append((start, end))
 

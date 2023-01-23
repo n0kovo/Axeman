@@ -36,16 +36,16 @@ async def download_worker(session, log_info, work_deque, download_queue):
         except IndexError:
             return
 
-        logging.debug("[{}] Queueing up blocks {}-{}...".format(log_info['url'], start, end))
+        logging.debug(f"[{log_info['url']}] Queueing up blocks {start}-{end}...")
 
         for x in range(3):
             try:
                 async with session.get(certlib.DOWNLOAD.format(log_info['url'], start, end)) as response:
                     entry_list = await response.json()
-                    logging.debug("[{}] Retrieved blocks {}-{}...".format(log_info['url'], start, end))
+                    logging.debug(f"[{log_info['url']}] Retrieved blocks {start}-{end}...")
                     break
             except Exception as e:
-                logging.error("Exception getting block {}-{}! {}".format(start, end, e))
+                logging.error(f"Exception getting block {start}-{end}! {e}")
         else:  # Notorious for else, if we didn't encounter a break our request failed 3 times D:
             with open('/tmp/fails.csv', 'a') as f:
                 f.write(",".join([log_info['url'], str(start), str(end)]))
@@ -87,17 +87,17 @@ async def retrieve_certificates(loop, url=None, ctl_offset=0, output_directory='
             work_deque = deque()
             download_results_queue = asyncio.Queue(maxsize=MAX_QUEUE_SIZE)
 
-            logging.info("Downloading certificates for {}".format(log['description']))
+            logging.info(f"Downloading certificates for {log['description']}")
             try:
                 log_info = await certlib.retrieve_log_info(log, session)
             except (aiohttp.ClientConnectorError, aiohttp.ServerTimeoutError, aiohttp.ClientOSError, aiohttp.ClientResponseError) as e:
-                logging.error("Failed to connect to CTL! -> {} - skipping.".format(e))
+                logging.error(f"Failed to connect to CTL! -> {e} - skipping.")
                 continue
 
             try:
                 await certlib.populate_work(work_deque, log_info, start=ctl_offset)
             except Exception as e:
-                logging.error("Log needs no update - {}".format(e))
+                logging.error(f"Log needs no update - {e}")
                 continue
 
             download_tasks = asyncio.gather(*[
@@ -123,7 +123,7 @@ async def retrieve_certificates(loop, url=None, ctl_offset=0, output_directory='
                 '/tmp/{}.csv'.format(log_info['url'].replace('/', '_'))
             ))
 
-            logging.info("Finished downloading and processing {}".format(log_info['url']))
+            logging.info(f"Finished downloading and processing {log_info['url']}")
 
 async def processing_coro(download_results_queue, output_dir="/tmp"):
     logging.info("Starting processing coro and process pool")
@@ -142,13 +142,13 @@ async def processing_coro(download_results_queue, output_dir="/tmp"):
                 done = True
                 break
 
-        logging.debug("Got a chunk of {}. Mapping into process pool".format(process_pool.pool_workers))
+        logging.debug(f"Got a chunk of {process_pool.pool_workers}. Mapping into process pool")
 
 
         for entry in entries_iter:
-            csv_storage = '{}/certificates/{}'.format(output_dir, entry['log_info']['url'].replace('/', '_'))
+            csv_storage = f"{output_dir}/certificates/{entry['log_info']['url'].replace('/', '_')}"
             if not os.path.exists(csv_storage):
-                print("[{}] Making dir...".format(os.getpid()))
+                print(f"[{os.getpid()}] Making dir...")
                 os.makedirs(csv_storage)
             entry['log_dir']=csv_storage
 
@@ -165,16 +165,16 @@ async def processing_coro(download_results_queue, output_dir="/tmp"):
     await process_pool.coro_join()
 
 def process_worker(result_info):
-    logging.debug("Worker {} starting...".format(os.getpid()))
+    logging.debug(f"Worker {os.getpid()} starting...")
     if not result_info:
         return
     try:
         csv_storage = result_info['log_dir']
-        csv_file = "{}/{}-{}.csv".format(csv_storage, result_info['start'], result_info['end'])
+        csv_file = f"{csv_storage}/{result_info['start']}-{result_info['end']}.csv"
 
         lines = []
 
-        print("[{}] Parsing...".format(os.getpid()))
+        print(f"[{os.getpid()}] Parsing...")
         for entry in result_info['entries']:
             mtl = certlib.MerkleTreeHeader.parse(base64.b64decode(entry['leaf_input']))
 
@@ -222,11 +222,11 @@ def process_worker(result_info):
                 ]) + "\n"
             )
 
-        print("[{}] Finished, writing CSV...".format(os.getpid()))
+        print(f"[{os.getpid()}] Finished, writing CSV...")
 
         with open(csv_file, 'w', encoding='utf8') as f:
             f.write("".join(lines))
-        print("[{}] CSV {} written!".format(os.getpid(), csv_file))
+        print(f"[{os.getpid()}] CSV {csv_file} written!")
 
     except Exception as e:
         print("========= EXCEPTION =========")
@@ -239,18 +239,20 @@ def process_worker(result_info):
 async def get_certs_and_print():
     async with aiohttp.ClientSession(conn_timeout=5) as session:
         ctls = await certlib.retrieve_all_ctls(session)
-        print("Found {} CTLs...".format(len(ctls)))
+        print(f"Found {len(ctls)} CTLs...")
         for log in ctls:
+            log_name = log['description']
             try:
                 log_info = await certlib.retrieve_log_info(log, session)
             except Exception as e:
+                logging.warn(f"Could not retrieve {log_name}")
                 continue
 
-            print(log['description'])
-            print("    \- URL:            {}".format(log['url']))
-            print("    \- Owner:          {}".format(log_info['operated_by']))
-            print("    \- Cert Count:     {}".format(locale.format("%d", log_info['tree_size']-1, grouping=True)))
-            print("    \- Max Block Size: {}\n".format(log_info['block_size']))
+            print(log_name)
+            print(f"    \\- URL:            {log['url']}")
+            print(f"    \\- Owner:          {log_info['operated_by']}")
+            print(f"    \\- Cert Count:     {locale.format('%d', log_info['tree_size'] - 1, grouping=True)}")
+            print(f"    \\- Max Block Size: {log_info['block_size']}\n")
 
 def main():
     loop = asyncio.get_event_loop()
