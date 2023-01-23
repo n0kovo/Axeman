@@ -23,6 +23,7 @@ from rich.console import Console
 from rich.live import Live
 from rich.table import Table
 from rich.text import Text
+from rich.progress import Progress
 
 try:
     locale.setlocale(locale.LC_ALL, 'en_US')
@@ -247,12 +248,16 @@ def process_worker(result_info):
     return True
 
 async def get_certs_and_print():
+
+    # Create table for printing
     table = Table(show_footer=False, expand=True, box=box.MINIMAL_DOUBLE_HEAD)
     table.add_column("Name", no_wrap=True)
     table.add_column("URL", no_wrap=True)
     table.add_column("Owner", no_wrap=True)
     table.add_column("Cert Count", no_wrap=True)
     table.add_column("Max Block Size", no_wrap=True)
+
+    # Live object for updating the table seamlessly
     with Live(table, refresh_per_second=4):
         async with aiohttp.ClientSession(conn_timeout=5) as session:
             ctls = await certlib.retrieve_all_ctls(session)
@@ -264,7 +269,8 @@ async def get_certs_and_print():
                 except Exception as e:
                     logging.debug(f"Could not retrieve {log_name}: {e}")
                     continue
-        
+
+                # Add CTL data as row
                 row = (str(log_name),
                             str(log['url']),
                             str(log_info['operated_by']),
