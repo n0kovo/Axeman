@@ -1,13 +1,11 @@
 import base64
-import math
-
 import datetime
 import inspect
+import math
 from collections import OrderedDict
 
 from icecream import ic
 from OpenSSL import crypto
-
 
 CTL_LISTS = 'https://www.gstatic.com/ct/log_list/v3/log_list.json'
 
@@ -15,7 +13,8 @@ CTL_INFO = "{}/ct/v1/get-sth"
 
 DOWNLOAD = "{}/ct/v1/get-entries?start={}&end={}"
 
-from construct import Struct, Byte, Int16ub, Int64ub, Enum, Bytes, Int24ub, this, GreedyBytes, GreedyRange, Terminated, Embedded
+from construct import (Byte, Bytes, Embedded, Enum, GreedyBytes, GreedyRange,
+                       Int16ub, Int24ub, Int64ub, Struct, Terminated, this)
 
 MerkleTreeHeader = Struct(
     "Version"         / Byte,
