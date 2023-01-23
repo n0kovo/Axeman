@@ -21,6 +21,7 @@ try:
 except:
     pass
 
+from icecream import ic
 from OpenSSL import crypto
 
 from . import certlib
@@ -242,7 +243,7 @@ async def get_certs_and_print():
         for log in ctls:
             try:
                 log_info = await certlib.retrieve_log_info(log, session)
-            except:
+            except Exception as e:
                 continue
 
             print(log['description'])

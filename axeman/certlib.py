@@ -2,15 +2,18 @@ import base64
 import math
 
 import datetime
+import inspect
 from collections import OrderedDict
 
+from icecream import ic
 from OpenSSL import crypto
+
 
 CTL_LISTS = 'https://www.gstatic.com/ct/log_list/v3/log_list.json'
 
-CTL_INFO = "http://{}/ct/v1/get-sth"
+CTL_INFO = "{}/ct/v1/get-sth"
 
-DOWNLOAD = "http://{}/ct/v1/get-entries?start={}&end={}"
+DOWNLOAD = "{}/ct/v1/get-entries?start={}&end={}"
 
 from construct import Struct, Byte, Int16ub, Int64ub, Enum, Bytes, Int24ub, this, GreedyBytes, GreedyRange, Terminated, Embedded
 
@@ -42,20 +45,18 @@ async def retrieve_all_ctls(session=None):
     async with session.get(CTL_LISTS) as response:
         ctl_lists = await response.json()
 
-        logs = ctl_lists['logs']
+        operators = ctl_lists['operators']
+        logs_parsed = []
+        for operator in operators:
+            logs = operator['logs']
 
-        for log in logs:
-            if log['url'].endswith('/'):
-                log['url'] = log['url'][:-1]
-            owner = _get_owner(log, ctl_lists['operators'])
-            log['operated_by'] = owner
+            for log in logs: 
+                if log['url'].endswith('/'):
+                    log['url'] = log['url'][:-1]
+                log['operated_by'] = operator["name"]
+                logs_parsed.append(log)
 
-        return logs
-
-def _get_owner(log, owners):
-    owner_id = log['operated_by'][0]
-    owner = next(x for x in owners if x['id'] == owner_id)
-    return owner['name']
+        return logs_parsed
 
 async def get_max_block_size(log, session):
     async with session.get(DOWNLOAD.format(log['url'], 0, 10000)) as response:
